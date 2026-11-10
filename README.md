@@ -1,3 +1,5 @@
+> **Instância AIVACS:** passo a passo de instalação em português em [docs/GUIA-AIVACS.md](docs/GUIA-AIVACS.md) (servidor grátis na Oracle, painel em espanhol).
+
 <div align="center">
 
 # OpenReply

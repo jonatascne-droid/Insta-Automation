@@ -6,3 +6,7 @@ node_modules
 __tests__
 docs
 *.md
+
+# AIVACS: nunca levar segredos nem os arquivos do servidor para a imagem
+**/.env*
+deploy

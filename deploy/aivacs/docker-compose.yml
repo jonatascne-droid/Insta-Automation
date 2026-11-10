@@ -1,0 +1,107 @@
+# Insta Automation (AIVACS) — tudo num servidor só (Oracle Cloud Always Free).
+#
+# Serviços: Postgres, Redis, migração do banco, web (painel + webhook), worker
+# (envia as DMs), cron (renova tokens) e Caddy (HTTPS automático).
+# Os valores secretos ficam em deploy/aivacs/.env, criado pelo instalar.sh e
+# nunca commitado (o .gitignore cobre .env*).
+#
+# Uso (dentro de deploy/aivacs/):  docker compose up -d --build
+
+name: insta-automation
+
+x-app: &app
+  image: insta-automation:local
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://openreply:${POSTGRES_PASSWORD:?rode o instalar.sh}@postgres:5432/openreply
+    REDIS_URL: redis://redis:6379
+    NODE_ENV: production
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openreply
+      POSTGRES_USER: openreply
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?rode o instalar.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreply -d openreply"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # A fila do BullMQ não pode perder jobs: sem despejo e com persistência.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    <<: *app
+    command: ["npm", "run", "start"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  worker:
+    <<: *app
+    command: ["npm", "run", "worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  cron:
+    <<: *app
+    command: ["sh", "scripts/cron.sh"]
+    environment:
+      DATABASE_URL: postgresql://openreply:${POSTGRES_PASSWORD:?rode o instalar.sh}@postgres:5432/openreply
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      CRON_BASE_URL: http://web:3000
+    depends_on:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?rode o instalar.sh}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:
