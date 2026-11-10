@@ -21,8 +21,25 @@ urlenc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv
 
 [ "$(id -u)" -eq 0 ] && SUDO="" || SUDO="sudo"
 
+say "Conferindo se o servidor já usa as portas 80/443 (sites, n8n, painéis...)"
+# Antes de instalar qualquer coisa: se outro programa já atende nessas portas,
+# para aqui sem mudar nada, para não derrubar o que já existe no servidor.
+porta_ocupada() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+OCUPADAS=""
+for p in 80 443; do porta_ocupada "$p" && OCUPADAS="$OCUPADAS $p"; done
+if [ -n "$OCUPADAS" ] && ! $SUDO docker ps --format '{{.Names}}' 2>/dev/null | grep -qx insta-automation-caddy-1; then
+  warn "Porta(s)$OCUPADAS já em uso neste servidor. Quem está usando:"
+  $SUDO docker ps --format '  contêiner {{.Names}} ({{.Image}}) {{.Ports}}' 2>/dev/null | grep -E ':(80|443)->' || true
+  $SUDO ss -ltnpH '( sport = :80 or sport = :443 )' 2>/dev/null | sed 's/^/  /' || true
+  echo
+  echo "Nada foi instalado nem alterado. Mande este texto para o Claude: ele ajusta a"
+  echo "instalação para funcionar junto com o que já existe."
+  exit 1
+fi
+echo "livres, ok"
+
 say "1/7 Memória de troca (evita falta de memória ao compilar)"
-if [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -lt 3500 ] && ! swapon --show | grep -q .; then
+if [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -lt 6000 ] && ! swapon --show | grep -q .; then
   $SUDO fallocate -l 4G /swapfile && $SUDO chmod 600 /swapfile && $SUDO mkswap /swapfile >/dev/null && $SUDO swapon /swapfile
   grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | $SUDO tee -a /etc/fstab >/dev/null
   echo "swap de 4 GB criado"
@@ -32,19 +49,28 @@ fi
 
 say "2/7 Pacotes do sistema e Docker"
 $SUDO apt-get update -qq
-$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates python3 openssl iptables-persistent >/dev/null
+$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates python3 openssl >/dev/null
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | $SUDO sh >/dev/null
 fi
 $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
 $SUDO docker compose version
 
-say "3/7 Liberando as portas 80 e 443 no firewall do Ubuntu"
-for p in 80 443; do
-  $SUDO iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || $SUDO iptables -I INPUT 1 -p tcp --dport "$p" -j ACCEPT
-done
-$SUDO netfilter-persistent save >/dev/null 2>&1 || true
-echo "ok (lembre de liberar também na Security List da Oracle, passo do guia)"
+say "3/7 Firewall do sistema (portas 80 e 443)"
+if command -v ufw >/dev/null && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
+  $SUDO ufw allow 80/tcp >/dev/null && $SUDO ufw allow 443/tcp >/dev/null
+  echo "liberadas no ufw"
+elif $SUDO iptables -S INPUT 2>/dev/null | grep -qE -- '-j (REJECT|DROP)'; then
+  # Imagens Ubuntu da Oracle bloqueiam tudo menos SSH.
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables-persistent >/dev/null
+  for p in 80 443; do
+    $SUDO iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || $SUDO iptables -I INPUT 1 -p tcp --dport "$p" -j ACCEPT
+  done
+  $SUDO netfilter-persistent save >/dev/null 2>&1 || true
+  echo "liberadas no iptables (na Oracle, libere também na Security List, passo do guia)"
+else
+  echo "o firewall do sistema não bloqueia, ok"
+fi
 
 say "4/7 Baixando o código"
 if [ -d "$DIR/.git" ]; then

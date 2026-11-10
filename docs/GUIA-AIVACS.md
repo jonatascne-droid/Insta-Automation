@@ -14,6 +14,17 @@ Baseado no OpenReply (licença MIT), com painel em espanhol e instalação num s
 
 ---
 
+## Já tem um VPS na Hostinger? Use este atalho
+
+Com um VPS da Hostinger (ex.: KVM 1), **pule as Partes 2, 3 e 4** (as da Oracle) e faça assim:
+
+- **Parte 5 (endereço):** hPanel → **Domínios** → `aivacs.online` → **DNS / Nameservers** → adicionar registro **A**, nome `auto`, apontando para o **IP do VPS** (aparece na lista de VPS do hPanel).
+- **Parte 6 (e-mail):** com um e-mail da Hostinger, use servidor `smtp.hostinger.com`, porta `465`, o e-mail completo como usuário e a senha dele.
+- **Parte 7 (instalar):** hPanel → **VPS** → **Gerenciar** → **Terminal do navegador**. Você já entra como administrador; cole o comando do passo 3 da Parte 7. Não precisa do Terminal do Mac nem do arquivo `.key`.
+- **Firewall:** se em hPanel → VPS → **Segurança → Firewall** houver regras ativas, adicione as portas TCP `80` e `443`. Se não houver nenhuma regra, não precisa fazer nada.
+
+O instalador confere antes se o VPS já tem algo usando as portas do site (outro site, n8n, painel). Se tiver, ele para sem mudar nada e mostra o que está lá.
+
 ## Parte 1 — Deixar o repositório público
 
 O servidor baixa o código do GitHub sem senha. No repositório não fica nenhuma senha nem dado de cliente: tudo isso fica só no servidor.
