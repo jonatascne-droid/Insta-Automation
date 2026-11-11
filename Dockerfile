@@ -21,6 +21,14 @@
 FROM node:20-slim AS build
 WORKDIR /app
 
+# AIVACS: with OpenSSL present, Prisma's postinstall fetches the schema engine
+# for debian-openssl-3.0.x (the runner's platform) into node_modules. Without
+# it, detection falls back to openssl-1.1.x and `prisma migrate deploy` has to
+# download the right engine at runtime, on every fresh container.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -53,7 +61,8 @@ COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 
 EXPOSE 3000
-# Default to the web process — the worker service overrides this with
-# `command: ["npm", "run", "worker"]` in whatever compose/stack file deploys
-# it (see openreply-vps.stack.yml in EvolutionAPI/omni-nexus for an example).
-CMD ["npm", "run", "start"]
+# AIVACS: by default run everything in one container (migrations, then web,
+# worker and cron; see scripts/aivacs-start.sh) so a panel like EasyPanel
+# needs a single app service. deploy/aivacs/docker-compose.yml still runs each
+# process as its own service by overriding `command`.
+CMD ["bash", "scripts/aivacs-start.sh"]
