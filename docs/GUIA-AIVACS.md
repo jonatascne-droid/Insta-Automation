@@ -30,17 +30,17 @@ O instalador confere antes se o VPS já tem algo usando as portas do site (outro
 Se o VPS mostra **EasyPanel** na Visão geral do hPanel, **não use o instalador**: o app entra como um projeto dentro do EasyPanel, sem mexer no que já roda lá.
 
 1. **DNS:** registro **A** `auto` → IP do VPS (como acima).
-2. **EasyPanel** (hPanel → VPS → **Gerenciar painel**) → **Create project** → nome `insta`.
-3. No projeto, **+ Service → Postgres**, nome `db`. Depois **+ Service → Redis**, nome `redis`.
-4. **+ Service → App**, nome `app`:
-   - **Source → Git:** `https://github.com/jonatascne-droid/Insta-Automation.git`, branch `main`. **Build:** Dockerfile (`Dockerfile`).
-   - **Environment:** no Web console do VPS, rode o comando abaixo, responda as perguntas e cole o bloco que ele mostrar:
+2. **EasyPanel** (hPanel → VPS → **Gerenciar painel**) → **+ Novo** → projeto `aivacs`.
+3. No projeto, **+ Serviço → Postgres**, nome `db`. Depois **+ Serviço → Redis**, nome `redis`. Nunca use **Expor** nesses dois.
+4. **+ Serviço → App**, nome `app`:
+   - **Fonte → Imagem Docker:** `ghcr.io/jonatascne-droid/insta-automation:latest` (usuário e senha vazios). A imagem é compilada pelo GitHub a cada atualização, então o VPS não gasta memória compilando.
+   - **Ambiente:** no Web console do VPS (hPanel → VPS → Web console; login `root` e a senha root), rode o comando abaixo, responda as perguntas e cole o bloco que ele mostrar:
      ```
      curl -fsSL https://raw.githubusercontent.com/jonatascne-droid/Insta-Automation/main/deploy/aivacs/easypanel-env.sh -o easypanel-env.sh && bash easypanel-env.sh
      ```
-   - **Domains:** `auto.aivacs.online`, HTTPS ligado, porta `3000`.
-   - **Deploy.** Um único serviço já roda as migrações do banco, o painel, o envio de DMs e a renovação de tokens.
-5. Depois do app da Meta (Parte 8), cole os 3 valores dela nas linhas `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` e `FACEBOOK_APP_SECRET` da aba **Environment** e clique em **Deploy** de novo.
+   - **Domínios → Adicionar domínio:** host `auto.aivacs.online`, HTTPS ligado; em **Destino**, protocolo `HTTP` e porta `80` (o EasyPanel manda o app usar a porta 80).
+   - **Implantar.** Um único serviço já roda as migrações do banco, o painel, o envio de DMs e a renovação de tokens. Nos logs deve aparecer `All migrations have been successfully applied`, `Ready` e `[DM Worker] Started`.
+5. Depois do app da Meta (Parte 8), cole os 3 valores dela nas linhas `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` e `FACEBOOK_APP_SECRET` da aba **Environment** e clique em **Implantar** de novo.
 
 ## Parte 1 — Deixar o repositório público
 
